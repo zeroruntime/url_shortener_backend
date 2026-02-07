@@ -9,6 +9,7 @@ from django.contrib.auth.models import User
 import string, random, math
 
 from api.models import Links
+from api.serializers import LinkSerializer
 
 # AUTHENTICATION
 @api_view(['GET'])
@@ -60,17 +61,59 @@ def generate_short_url():
 
     return short_url
 
+# OUTDATED POST REUEST (DOESNT USE SERIALIZATION)
+# @api_view(['POST'])
+# def shorten_url(request):
+#     longUrl = request.data.get('longUrl')
+
+#     if not longUrl:
+#         return Response({'error':'Long URL is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+#     # if Links.objects.filter(original_url=longUrl).exists():
+#     #     return Response({"error":"Original Url already exists"})
+
+#     existing_link = Links.objects.filter(original_url=longUrl).first()
+#     if existing_link:
+#         return Response({
+#             'shortUrl': existing_link.short_code,
+#             'longUrl': existing_link.original_url,
+#             'message': 'URL already has a short code'
+#         }, status=status.HTTP_200_OK)
+
+#     max_tries = 10
+#     tries = 0
+
+#     while True:
+#         tries += 1
+#         short_code = generate_short_url()
+
+#         try:
+#             link = Links.objects.create(short_code=short_code, original_url=longUrl)
+#             newlinks = {
+#                 "shortUrl":short_code,
+#                 "longUrl":longUrl
+#             }
+#             return Response(newlinks, status=status.HTTP_201_CREATED)
+
+#         except IntegrityError:
+#             if tries > max_tries:
+#                 break
+#             continue
+#     return Response({"error": "Could not generate unique short URL after multiple attempts"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# NEW POST REQUEST TO CREATE SHORT URL
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def shorten_url(request):
-    longUrl = request.data.get('longUrl')
+    serializer = LinkSerializer(data=request.data, context={'request': request})
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    if not longUrl:
-        return Response({'error':'Long URL is required'}, status=status.HTTP_400_BAD_REQUEST)
+    longUrl = serializer.validated_data['original_url']
+    user = request.user
 
-    # if Links.objects.filter(original_url=longUrl).exists():
-    #     return Response({"error":"Original Url already exists"})
-
-    existing_link = Links.objects.filter(original_url=longUrl).first()
+    existing_link = Links.objects.filter(original_url=longUrl, user=user).first()
     if existing_link:
         return Response({
             'shortUrl': existing_link.short_code,
@@ -80,28 +123,27 @@ def shorten_url(request):
 
     max_tries = 10
     tries = 0
-
-    while True:
+    while tries < max_tries:
         tries += 1
         short_code = generate_short_url()
-
         try:
-            link = Links.objects.create(short_code=short_code, original_url=longUrl)
-            newlinks = {
-                "shortUrl":short_code,
-                "longUrl":longUrl
-            }
-            return Response(newlinks, status=status.HTTP_201_CREATED)
-
+            link = serializer.save(short_code=short_code)
+            return Response({
+                'shortUrl': link.short_code,
+                'longUrl': link.original_url
+            }, status=status.HTTP_201_CREATED)
         except IntegrityError:
-            if tries > max_tries:
-                break
             continue
-    return Response({"error": "Could not generate unique short URL after multiple attempts"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response(
+        {"error": "Could not generate unique short URL"},
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def getlinks(request):
     user = request.user
     allshortlinks = Links.objects.filter(user=user)
-
-    
+    serializer = LinkSerializer(allshortlinks, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
