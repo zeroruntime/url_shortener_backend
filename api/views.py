@@ -100,5 +100,8 @@ def shorten_url(request):
     return Response({"error": "Could not generate unique short URL after multiple attempts"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-def getlinks(reequest):
-    allshortlinks = Links.objects.filter()
+def getlinks(request):
+    user = request.user
+    allshortlinks = Links.objects.filter(user=user)
+
+    
