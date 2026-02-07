@@ -1,3 +1,4 @@
+from django.db import IntegrityError
 from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -5,7 +6,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
+import string, random, math
 
+from api.models import Links
+
+# AUTHENTICATION
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def protected_view(request):
@@ -41,3 +46,59 @@ def logout(request):
         return Response({'message':'Logout successful'}, status=status.HTTP_205_RESET_CONTENT)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# URL SHORTENING LOGIC
+def generate_short_url():
+    BASE62_ALPHABET = string.digits + string.ascii_letters
+    # BASENUM = len(BASE62_ALPHABET)
+
+    short_url = ''
+
+    for i in range(6):
+        # short_url += BASE62_ALPHABET[math.floor(random.random() * BASENUM)]
+        short_url += random.choice(BASE62_ALPHABET)
+
+    return short_url
+
+@api_view(['POST'])
+def shorten_url(request):
+    longUrl = request.data.get('longUrl')
+
+    if not longUrl:
+        return Response({'error':'Long URL is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # if Links.objects.filter(original_url=longUrl).exists():
+    #     return Response({"error":"Original Url already exists"})
+
+    existing_link = Links.objects.filter(original_url=longUrl).first()
+    if existing_link:
+        return Response({
+            'shortUrl': existing_link.short_code,
+            'longUrl': existing_link.original_url,
+            'message': 'URL already has a short code'
+        }, status=status.HTTP_200_OK)
+
+    max_tries = 10
+    tries = 0
+
+    while True:
+        tries += 1
+        short_code = generate_short_url()
+
+        try:
+            link = Links.objects.create(short_code=short_code, original_url=longUrl)
+            newlinks = {
+                "shortUrl":short_code,
+                "longUrl":longUrl
+            }
+            return Response(newlinks, status=status.HTTP_201_CREATED)
+
+        except IntegrityError:
+            if tries > max_tries:
+                break
+            continue
+    return Response({"error": "Could not generate unique short URL after multiple attempts"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def getlinks(reequest):
+    allshortlinks = Links.objects.filter()
