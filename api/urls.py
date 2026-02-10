@@ -12,6 +12,6 @@ urlpatterns = [
     path('v1/auth/register/', register, name='register'),
     path('v1/auth/logout/', logout, name='logout'),
 
-    path('v1/urls/shorten/', shorten_url, name='shorten_url')
+    path('v1/urls/shorten/', shorten_url, name='shorten_url'),
     path('v1/urls/getall/', getlinks, name='getlinks')
 ]

@@ -1,15 +1,16 @@
+from datetime import timezone
 from django.db import IntegrityError
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
-import string, random, math
+import string, random, math, secrets
 
-from api.models import Links
-from api.serializers import LinkSerializer
+from api.models import Clicks, Links
+from api.serializers import ClickSerializer, LinkSerializer
 
 # AUTHENTICATION
 @api_view(['GET'])
@@ -49,17 +50,24 @@ def logout(request):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # URL SHORTENING LOGIC
+
+# Old method, insecure and open to bruteforcing
+# def generate_short_url():
+#     BASE62_ALPHABET = string.digits + string.ascii_letters
+#     # BASENUM = len(BASE62_ALPHABET)
+
+#     short_url = ''
+
+#     for i in range(6):
+#         # short_url += BASE62_ALPHABET[math.floor(random.random() * BASENUM)]
+#         short_url += random.choice(BASE62_ALPHABET)
+
+#     return short_url
+
+# New method, using secrets to generate the short url
 def generate_short_url():
     BASE62_ALPHABET = string.digits + string.ascii_letters
-    # BASENUM = len(BASE62_ALPHABET)
-
-    short_url = ''
-
-    for i in range(6):
-        # short_url += BASE62_ALPHABET[math.floor(random.random() * BASENUM)]
-        short_url += random.choice(BASE62_ALPHABET)
-
-    return short_url
+    return ''.join(secrets.choice(BASE62_ALPHABET) for _ in range(6))
 
 # OUTDATED POST REUEST (DOESNT USE SERIALIZATION)
 # @api_view(['POST'])
@@ -113,7 +121,7 @@ def shorten_url(request):
     longUrl = serializer.validated_data['original_url']
     user = request.user
 
-    existing_link = Links.objects.filter(original_url=longUrl, user=user).first()
+    existing_link = Links.objects.filter(original_url=longUrl, user_id=user).first()
     if existing_link:
         return Response({
             'shortUrl': existing_link.short_code,
@@ -147,3 +155,42 @@ def getlinks(request):
     allshortlinks = Links.objects.filter(user=user)
     serializer = LinkSerializer(allshortlinks, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def getlink(request, pk):
+    user = request.user
+    try:
+        link = Links.objects.filter(user=user).get(pk=pk)
+        serializer = LinkSerializer(link)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Links.DoesNotExist:
+        return Response({'error':'Link not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def deletelink(request, pk):
+    user = request.user
+    link = get_object_or_404(Links, pk=pk, user=user)
+    link.delete()
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+def redirect_url(request, short_code):
+    try:
+        link = Links.objects.get(short_code=short_code, is_active=True)
+
+        if link.expires_at and link.expires_at > timezone.now():
+            return Response({"error":"Link has expired"}, status=status.HTTP_410_GONE)
+
+        Clicks.objects.create(
+            link=link,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            referrer=request.META.get('HTTP_REFERER', '')
+        )
+
+        return Response({'redirect_to': link.original_url}, status=status.HTTP_302_FOUND)
+    except Links.DoesNotExist:
+        return Response({'error': 'Link not found'}, status=status.HTTP_404_NOT_FOUND)
