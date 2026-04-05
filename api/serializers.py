@@ -5,8 +5,13 @@ from .models import *
 class LinkSerializer(serializers.ModelSerializer):
     class Meta:
         model = Links
-        fields = ['id', 'short_code', 'original_url', 'user', 'is_active', 'expires_at']
+        fields = ['id', 'short_code', 'original_url', 'custom_alias', 'user', 'is_active', 'expires_at']
         read_only_fields = ['id', 'short_code', 'user']
+    
+    def validate_custom_alias(self, value):
+        if value and Links.objects.filter(custom_alias=value).exclude(id=self.instance.id if self.instance else None).exists():
+            raise serializers.ValidationError("This custom alias is already taken")
+        return value
 
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user

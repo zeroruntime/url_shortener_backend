@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_spectacular',
     'api',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -82,30 +83,18 @@ WSGI_APPLICATION = 'url_shortener_backend.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 load_dotenv()
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.postgresql",
-#         "NAME": os.getenv("DB_NAME"),
-#         "USER": os.getenv("DB_USER"),
-#         "PASSWORD": os.getenv("DB_PASSWORD"),
-#         "HOST": os.getenv("DB_HOST"),
-#         "PORT": os.getenv("DB_PORT", "5432"),
-#         "OPTIONS": {
-#             "sslmode": "require",
-#         },
-#     }
-# }
-
-DATABASES = {
-    "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
-}
+# Use SQLite for MVP local development; upgrade to PostgreSQL with DATABASE_URL for production
+if os.environ.get("DATABASE_URL"):
+    DATABASES = {
+        "default": dj_database_url.parse(os.environ.get("DATABASE_URL")),
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -147,10 +136,10 @@ STATIC_URL = 'static/'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-# Optional: Add simple JWT settings for token lifetimes and rotation
 from datetime import timedelta
 
 SIMPLE_JWT = {
@@ -159,4 +148,29 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
+}
+
+# Caching configuration 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# Rate limiting settings
+RATE_LIMIT_SETTINGS = {
+    'LINK_CREATION': {'requests': 100, 'window': 3600},  # 100 links per hour
+    'REDIRECTS': {'requests': 1000, 'window': 3600},  # 1000 redirects per hour
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'PopOff API',
+    'DESCRIPTION': 'API documentation for the PopOff URL Shortener service',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # OTHER SETTINGS
+    # 'SWAGGER_UI_DIST': 'SIDECAR',
+    # 'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    # 'REDOC_DIST': 'SIDECAR',
 }

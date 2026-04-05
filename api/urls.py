@@ -13,5 +13,8 @@ urlpatterns = [
     path('v1/auth/logout/', logout, name='logout'),
 
     path('v1/urls/shorten/', shorten_url, name='shorten_url'),
-    path('v1/urls/getall/', getlinks, name='getlinks')
+    path('v1/urls/getall/', getlinks, name='getlinks'),
+    path('v1/urls/<int:pk>/', getlink, name='getlink'),
+    path('v1/urls/delete/<int:pk>/', deletelink, name='deletelink'),
+    path('v1/urls/<int:pk>/analytics/', getlinkanalytics, name='getlinkanalytics'),
 ]

@@ -5,6 +5,7 @@ class Links(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     short_code = models.CharField(max_length=7, db_index=True, unique=True)
     original_url = models.URLField()
+    custom_alias = models.CharField(max_length=50, db_index=True, unique=True, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

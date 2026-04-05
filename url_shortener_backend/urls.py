@@ -15,9 +15,30 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from api.views import redirect_url
+from drf_spectacular.views import SpectacularSwaggerView, SpectacularAPIView
+try:
+    from drf_spectacular.views import SpectacularReDocView
+except ImportError:
+    SpectacularReDocView = None
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+    
+    # Swagger/OpenAPI documentation
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
+
+# Add ReDoc if available
+if SpectacularReDocView:
+    urlpatterns.append(
+        path('api/redoc/', SpectacularReDocView.as_view(url_name='schema'), name='redoc')
+    )
+
+# Root level redirect
+urlpatterns.append(
+    path('<str:short_code>/', redirect_url, name='redirect_url')
+)
