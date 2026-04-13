@@ -1,60 +1,72 @@
-# from datetime import timezone
-from django.db import IntegrityError
-from django.shortcuts import get_object_or_404, render
-from django.http import HttpResponseRedirect
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
-import string, random, math, secrets
-from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
+from django.http import HttpResponseRedirect
+from django.db import IntegrityError
 from django.utils import timezone
-from datetime import timedelta
-from django.views.decorators.cache import cache_page
-from django.core.cache import cache
-from functools import wraps
+from django.utils.decorators import method_decorator
+from drf_spectacular.utils import extend_schema
 
-from api.models import Clicks, Links
-from api.serializers import ClickSerializer, LinkSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from api.models import Links, Clicks
+from api.serializers import LinkSerializer, RegisterSerializer, LogoutSerializer
+
+from functools import wraps
+from django.core.cache import cache
+from django.db.models import Count
+
+import string, secrets
 
 # AUTHENTICATION
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def protected_view(request):
-    user = request.user
-    return Response({
-        'message': f'Hello, {user.username}, you are authenticated!'
-    })
+class ProtectedView(APIView):
+    permission_classes = [IsAuthenticated]
 
-@api_view(['POST'])
-def register(request):
-    username = request.data.get('username')
-    password = request.data.get('password')
-    email = request.data.get('email')
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        return Response({
+            "message": f"Hello, {request.user.username}, you are authenticated!"
+        })
 
-    if not username or not password:
-        return Response({'error': 'Username and password are required'})
+class RegisterView(APIView):
 
-    if User.objects.filter(username=username).exists():
-        return Response({'error':'Username exists already'})
+    @extend_schema(
+        request=RegisterSerializer,
+        responses={201: None}
+    )
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-    user = User.objects.create_user(username=username, password=password, email=email)
-    user.save()
+        if User.objects.filter(username=serializer.validated_data["username"]).exists():
+            return Response(
+                {"error": "Username exists already"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-    return Response({'message':'User created successfully'}, status=status.HTTP_201_CREATED)
+        serializer.save()
+        return Response({"message": "User created successfully"}, status=201)
+    
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def logout(request):
-    try:
-        refresh_token = request.data['refresh']
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-        return Response({'message':'Logout successful'}, status=status.HTTP_205_RESET_CONTENT)
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    @extend_schema(
+        request=LogoutSerializer,
+        responses={205: None}
+    )
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            token = RefreshToken(serializer.validated_data["refresh"])
+            token.blacklist()
+            return Response({"message": "Logout successful"}, status=205)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
 
 # URL SHORTENING LOGIC
 
@@ -72,29 +84,35 @@ def logout(request):
 #     return short_url
 
 # New method, using secrets to generate the short url
-def generate_short_url():
-    BASE62_ALPHABET = string.digits + string.ascii_letters
-    return ''.join(secrets.choice(BASE62_ALPHABET) for _ in range(6))
+# def generate_short_url():
+#     BASE62_ALPHABET = string.digits + string.ascii_letters
+#     return ''.join(secrets.choice(BASE62_ALPHABET) for _ in range(6))
 
 def rate_limit(max_requests, time_window_seconds):
-    """Decorator to rate limit endpoints. Track by user ID (if authenticated) or IP address."""
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
+
             if request.user.is_authenticated:
                 key = f"rate_limit:user:{request.user.id}"
             else:
                 key = f"rate_limit:ip:{request.META.get('REMOTE_ADDR')}"
-            
-            current = cache.get(key, 0)
+
+            current = cache.get(key)
+
+            if current is None:
+                cache.add(key, 1, timeout=time_window_seconds)
+                return view_func(request, *args, **kwargs)
+
             if current >= max_requests:
                 return Response(
-                    {'error': f'Rate limit exceeded. Max {max_requests} requests per {time_window_seconds} seconds'},
+                    {"error": "Rate limit exceeded"},
                     status=status.HTTP_429_TOO_MANY_REQUESTS
                 )
-            
-            cache.set(key, current + 1, time_window_seconds)
+
+            cache.incr(key)
             return view_func(request, *args, **kwargs)
+
         return wrapper
     return decorator
 
@@ -140,137 +158,119 @@ def rate_limit(max_requests, time_window_seconds):
 
 
 # NEW POST REQUEST TO CREATE SHORT URL
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@rate_limit(max_requests=100, time_window_seconds=3600)  # 100 links per hour
-def shorten_url(request):
-    serializer = LinkSerializer(data=request.data, context={'request': request})
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+def generate_short_url():
+    BASE62 = string.digits + string.ascii_letters
+    return ''.join(secrets.choice(BASE62) for _ in range(6))
 
-    longUrl = serializer.validated_data['original_url']
-    custom_alias = serializer.validated_data.get('custom_alias')
-    user = request.user
+@method_decorator(rate_limit(100, 3600), name='post')
+class ShortenURLView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    existing_link = Links.objects.filter(original_url=longUrl, user_id=user).first()
-    if existing_link:
-        return Response({
-            'shortUrl': existing_link.short_code,
-            'customAlias': existing_link.custom_alias,
-            'longUrl': existing_link.original_url,
-            'message': 'URL already has a short code'
-        }, status=status.HTTP_200_OK)
-
-    max_tries = 10
-    tries = 0
-    
-    # Use custom alias if provided
-    if custom_alias:
-        if Links.objects.filter(custom_alias=custom_alias).exists():
-            return Response(
-                {"error": "Custom alias already taken"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        short_code = custom_alias
-    else:
-        short_code = None
-    
-    while tries < max_tries:
-        tries += 1
-        if not short_code:
-            short_code = generate_short_url()
-        try:
-            link = serializer.save(short_code=short_code)
-            return Response({
-                'shortUrl': link.short_code,
-                'customAlias': link.custom_alias,
-                'longUrl': link.original_url
-            }, status=status.HTTP_201_CREATED)
-        except IntegrityError:
-            if custom_alias:
-                return Response(
-                    {"error": "Custom alias already taken"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            short_code = None  # Reset for next iteration
-            continue
-
-    return Response(
-        {"error": "Could not generate unique short URL"},
-        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    @extend_schema(
+        request=LinkSerializer,
+        responses={201: LinkSerializer}
     )
+    def post(self, request):
+        serializer = LinkSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def getlinks(request):
-    user = request.user
-    limit = int(request.query_params.get('limit', 10))
-    offset = int(request.query_params.get('offset', 0))
-    
-    # Ensure reasonable limits
-    limit = min(limit, 100)
-    offset = max(offset, 0)
-    
-    allshortlinks = Links.objects.filter(user=user).order_by('-created_at')[offset:offset + limit]
-    total_count = Links.objects.filter(user=user).count()
-    
-    serializer = LinkSerializer(allshortlinks, many=True)
-    return Response({
-        'total': total_count,
-        'limit': limit,
-        'offset': offset,
-        'results': serializer.data
-    }, status=status.HTTP_200_OK)
+        user = request.user
+        long_url = serializer.validated_data["original_url"]
+        custom_alias = serializer.validated_data.get("custom_alias")
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def getlink(request, pk):
-    user = request.user
-    try:
-        link = Links.objects.filter(user=user).get(pk=pk)
-        serializer = LinkSerializer(link)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    except Links.DoesNotExist:
-        return Response({'error':'Link not found'}, status=status.HTTP_404_NOT_FOUND)
+        existing = Links.objects.filter(original_url=long_url, user=user).first()
+        if existing:
+            return Response({
+                "shortUrl": existing.short_code,
+                "customAlias": existing.custom_alias,
+                "longUrl": existing.original_url,
+                "message": "URL already exists"
+            })
 
-@api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
-def deletelink(request, pk):
-    user = request.user
-    link = get_object_or_404(Links, pk=pk, user=user)
-    link.delete()
+        if custom_alias and Links.objects.filter(custom_alias=custom_alias).exists():
+            return Response({"error": "Custom alias taken"}, status=400)
 
-    return Response(status=status.HTTP_204_NO_CONTENT)
+        for _ in range(10):
+            short_code = custom_alias or generate_short_url()
+            try:
+                link = serializer.save(user=user, short_code=short_code)
+                return Response({
+                    "shortUrl": link.short_code,
+                    "customAlias": link.custom_alias,
+                    "longUrl": link.original_url
+                }, status=201)
+            except IntegrityError:
+                if custom_alias:
+                    break
 
-@api_view(['GET'])
-@rate_limit(max_requests=1000, time_window_seconds=3600)  # 1000 redirects per hour per IP
-def redirect_url(request, short_code):
-    try:
-        link = Links.objects.get(short_code=short_code, is_active=True)
+        return Response({"error": "Could not generate unique short URL"}, status=500)
 
-        # FIX: Check if link has expired (should be <, not >)
-        if link.expires_at and link.expires_at < timezone.now():
-            return Response({"error":"Link has expired"}, status=status.HTTP_410_GONE)
+class LinkListView(APIView):
+    permission_classes = [IsAuthenticated]
 
-        # Record click asynchronously (deferred for now, but queued for Celery later)
-        Clicks.objects.create(
-            link=link,
-            ip_address=request.META.get('REMOTE_ADDR'),
-            user_agent=request.META.get('HTTP_USER_AGENT', ''),
-            referrer=request.META.get('HTTP_REFERER', '')
-        )
+    @extend_schema(responses={200: LinkSerializer(many=True)})
+    def get(self, request):
+        limit = min(int(request.query_params.get("limit", 10)), 100)
+        offset = max(int(request.query_params.get("offset", 0)), 0)
 
-        # Return proper HTTP 302 redirect
-        return HttpResponseRedirect(link.original_url)
-    except Links.DoesNotExist:
-        return Response({'error': 'Link not found'}, status=status.HTTP_404_NOT_FOUND)
+        queryset = Links.objects.filter(user=request.user).order_by("-created_at")
+        total = queryset.count()
+        links = queryset[offset:offset + limit]
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def getlinkanalytics(request, pk):
-    user =  request.user
-    try:
-        link = Links.objects.filter(user=user).get(pk=pk)
+        serializer = LinkSerializer(links, many=True)
+
+        return Response({
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "results": serializer.data
+        })
+
+class LinkDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: LinkSerializer})
+    def get(self, request, pk):
+        link = get_object_or_404(Links, pk=pk, user=request.user)
+        return Response(LinkSerializer(link).data)
+
+class DeleteLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={204: None})
+    def delete(self, request, pk):
+        link = get_object_or_404(Links, pk=pk, user=request.user)
+        link.delete()
+        return Response(status=204)
+
+@method_decorator(rate_limit(1000, 3600), name='get')
+class RedirectView(APIView):
+
+    @extend_schema(exclude=True)
+    def get(self, request, short_code):
+        try:
+            link = Links.objects.get(short_code=short_code, is_active=True)
+
+            if link.expires_at and link.expires_at < timezone.now():
+                return Response({"error": "Link expired"}, status=410)
+
+            Clicks.objects.create(
+                link=link,
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+
+            return HttpResponseRedirect(link.original_url)
+
+        except Links.DoesNotExist:
+            return Response({"error": "Not found"}, status=404)
+
+class LinkAnalyticsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: None})
+    def get(self, request, pk):
+        link = get_object_or_404(Links, pk=pk, user=request.user)
         clicks = Clicks.objects.filter(link=link)
 
         data = {
@@ -282,7 +282,6 @@ def getlinkanalytics(request, pk):
                 'expires_at': link.expires_at,
             },
             'total_clicks': clicks.count(),
-
             'clicks_by_country': list(
                 clicks.values('country')
                 .annotate(count=Count('id'))
@@ -291,6 +290,3 @@ def getlinkanalytics(request, pk):
         }
 
         return Response(data)
-
-    except Links.DoesNotExist:
-        return Response({'error': 'Link not found'}, status=status.HTTP_404_NOT_FOUND)

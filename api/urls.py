@@ -1,20 +1,32 @@
 from django.urls import path
-from .views import *
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
+from .views import (
+    ProtectedView,
+    RegisterView,
+    LogoutView,
+    ShortenURLView,
+    LinkListView,
+    LinkDetailView,
+    DeleteLinkView,
+    RedirectView,
+    LinkAnalyticsView,
 )
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
-    path('v1/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('v1/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('v1/auth/protected/', protected_view, name='protected_view'),
-    path('v1/auth/register/', register, name='register'),
-    path('v1/auth/logout/', logout, name='logout'),
+    path('auth/token/', TokenObtainPairView.as_view(), name='token'),
+    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('auth/register/', RegisterView.as_view(), name='register'),
+    path('auth/logout/', LogoutView.as_view(), name='logout'),
+    path('auth/protected/', ProtectedView.as_view(), name='protected'),
 
-    path('v1/urls/shorten/', shorten_url, name='shorten_url'),
-    path('v1/urls/getall/', getlinks, name='getlinks'),
-    path('v1/urls/<int:pk>/', getlink, name='getlink'),
-    path('v1/urls/delete/<int:pk>/', deletelink, name='deletelink'),
-    path('v1/urls/<int:pk>/analytics/', getlinkanalytics, name='getlinkanalytics'),
+    path('links/shorten/', ShortenURLView.as_view(), name='shorten-url'),
+
+    path('links/', LinkListView.as_view(), name='list-links'),
+    path('links/<int:pk>/', LinkDetailView.as_view(), name='get-link'),
+    path('links/<int:pk>/delete/', DeleteLinkView.as_view(), name='delete-link'),
+
+
+    path('links/<int:pk>/analytics/', LinkAnalyticsView.as_view(), name='link-analytics'),
+
+    # path('<str:short_code>/', RedirectView.as_view(), name='redirect'),
 ]

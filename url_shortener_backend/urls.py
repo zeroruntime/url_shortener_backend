@@ -16,8 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include, re_path
-from api.views import redirect_url
+# from api.views import redirect_url
 from drf_spectacular.views import SpectacularSwaggerView, SpectacularAPIView
+
+from api.views import RedirectView
 try:
     from drf_spectacular.views import SpectacularReDocView
 except ImportError:
@@ -32,7 +34,6 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
 
-# Add ReDoc if available
 if SpectacularReDocView:
     urlpatterns.append(
         path('api/redoc/', SpectacularReDocView.as_view(url_name='schema'), name='redoc')
@@ -40,5 +41,5 @@ if SpectacularReDocView:
 
 # Root level redirect
 urlpatterns.append(
-    path('<str:short_code>/', redirect_url, name='redirect_url')
+    path('<str:short_code>/', RedirectView.as_view(), name='redirect'),
 )

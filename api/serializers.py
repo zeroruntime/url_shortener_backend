@@ -1,6 +1,7 @@
-from datetime import timezone
+from django.utils import timezone
 from rest_framework import serializers
 from .models import *
+from django.contrib.auth.models import User
 
 class LinkSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,3 +33,15 @@ class ClickSerializer(serializers.ModelSerializer):
         model = Clicks
         fields = ['link_id', 'timestamp', 'country', 'device_type', 'referrer']
         read_only_fields = ['link_id', 'timestamp', 'country', 'device_type', 'referrer']
+
+class RegisterSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    email = serializers.EmailField(required=False)
+
+    def create(self, validated_data):
+        return User.objects.create_user(**validated_data)
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
