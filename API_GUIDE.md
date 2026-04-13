@@ -69,7 +69,7 @@ This provides:
 
 #### Register a New User
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/register/ \
+curl -X POST http://localhost:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{
     "username": "john_doe",
@@ -89,7 +89,7 @@ curl -X POST http://localhost:8000/api/v1/auth/register/ \
 
 #### Login & Get JWT Token
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/token/ \
+curl -X POST http://localhost:8000/api/auth/token/ \
   -H "Content-Type: application/json" \
   -d '{
     "username": "john_doe",
@@ -111,7 +111,7 @@ curl -X POST http://localhost:8000/api/v1/auth/token/ \
 
 #### Refresh Token
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/token/refresh/ \
+curl -X POST http://localhost:8000/api/auth/token/refresh/ \
   -H "Content-Type: application/json" \
   -d '{
     "refresh": "YOUR_REFRESH_TOKEN"
@@ -122,7 +122,7 @@ curl -X POST http://localhost:8000/api/v1/auth/token/refresh/ \
 
 #### Logout (Blacklist Token)
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/logout/ \
+curl -X POST http://localhost:8000/api/auth/logout/ \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -139,7 +139,7 @@ curl -X POST http://localhost:8000/api/v1/auth/logout/ \
 
 #### Create a Short Link (Auto-Generated Code)
 ```bash
-curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
+curl -X POST http://localhost:8000/api/shorten/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
@@ -160,7 +160,7 @@ curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
 
 #### Create a Short Link with Custom Alias
 ```bash
-curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
+curl -X POST http://localhost:8000/api/shorten/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
@@ -182,7 +182,7 @@ curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
 
 #### Create a Link with Expiration
 ```bash
-curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
+curl -X POST http://localhost:8000/api/shorten/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
@@ -197,7 +197,7 @@ Expired links will return HTTP 410 (Gone) when accessed.
 
 #### List All User Links (with Pagination)
 ```bash
-curl -X GET "http://localhost:8000/api/v1/urls/getall/?limit=10&offset=0" \
+curl -X GET "http://localhost:8000/api/links/?limit=10&offset=0" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -229,7 +229,7 @@ curl -X GET "http://localhost:8000/api/v1/urls/getall/?limit=10&offset=0" \
 
 #### Get Link Details
 ```bash
-curl -X GET "http://localhost:8000/api/v1/urls/1/" \
+curl -X GET "http://localhost:8000/api/links/1/" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -237,7 +237,7 @@ curl -X GET "http://localhost:8000/api/v1/urls/1/" \
 
 #### Get Link Analytics
 ```bash
-curl -X GET "http://localhost:8000/api/v1/urls/1/analytics/" \
+curl -X GET "http://localhost:8000/api/links/1/analytics/" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -269,7 +269,7 @@ curl -X GET "http://localhost:8000/api/v1/urls/1/analytics/" \
 
 #### Delete a Link
 ```bash
-curl -X DELETE "http://localhost:8000/api/v1/urls/delete/1/" \
+curl -X DELETE "http://localhost:8000/api/links/delete/1/" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -333,14 +333,14 @@ Exceeding limits returns HTTP 429 (Too Many Requests):
 
 ### Step 1: Register
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/register/ \
+curl -X POST http://localhost:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{"username":"testuser","email":"test@example.com","password":"Test123!"}'
 ```
 
 ### Step 2: Get Token
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/token/ \
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/token/ \
   -H "Content-Type: application/json" \
   -d '{"username":"testuser","password":"Test123!"}' | grep -o '"access":"[^"]*"' | cut -d'"' -f4)
 
@@ -349,7 +349,7 @@ echo "Token: $TOKEN"
 
 ### Step 3: Create a Link
 ```bash
-curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
+curl -X POST http://localhost:8000/api/urls/shorten/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"original_url":"https://example.com","custom_alias":"ex"}'
@@ -357,7 +357,7 @@ curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
 
 ### Step 4: List Links
 ```bash
-curl -X GET "http://localhost:8000/api/v1/urls/getall/?limit=5" \
+curl -X GET "http://localhost:8000/api/urls/getall/?limit=5" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -368,7 +368,7 @@ curl -i http://localhost:8000/ex/
 
 ### Step 6: Get Analytics
 ```bash
-curl -X GET "http://localhost:8000/api/v1/urls/1/analytics/" \
+curl -X GET "http://localhost:8000/api/urls/1/analytics/" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
