@@ -1,37 +1,43 @@
 # PopOff - URL Shortener Backend
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/zeroruntime/url_shortener_backend)
 
-PopOff is a robust and scalable URL shortener backend built with Django and Django REST Framework. It provides a comprehensive API for creating, managing, and tracking shortened URLs with detailed analytics.
+PopOff is a robust and scalable URL shortener backend built with Django and Django REST Framework. It provides a comprehensive API for creating, managing, and tracking shortened URLs with optional expiration and analytics.
 
-I chose this project to help me practice and get more familiar with Django REST Framework
+This project was built to deepen practical experience with Django REST Framework and API design.
 
-AI was used in generating the Markdown files such as this README, the API_Guide and the Architecture markdown, It was used to go over the workspace to locate and help me fix critical bugs 
+AI assistance was used for generating documentation (like this README, API guides, and architecture notes) and for debugging support across the codebase.
+
+---
 
 ## Core Features
 
--   **JWT Authentication**: Secure user registration and login using JSON Web Tokens.
--   **Link Management**: Full CRUD functionality for creating, listing, retrieving, and deleting short links.
--   **Custom Aliases**: Users can define their own custom short codes for branded links.
--   **Link Expiration**: Set an expiration date and time for temporary links.
--   **Click Analytics**: Tracks each click and records metadata like country, device type, referrer, and IP address.
--   **Rate Limiting**: Built-in protection against abuse with request throttling on critical endpoints.
--   **Interactive API Docs**: Explore and test the API in real-time with the integrated Swagger UI.
+* **JWT Authentication**: Secure user registration, login, token refresh, and logout.
+* **Link Management**: Create, list, retrieve, and delete shortened links.
+* **Custom Aliases**: Optionally define your own short codes.
+* **Link Expiration**: Set expiration timestamps for temporary links.
+* **Link Activation Control**: Enable/disable links dynamically.
+* **Click Analytics**: Endpoint available for retrieving link analytics.
+* **Protected Routes**: JWT-protected endpoints for user-specific data.
+* **OpenAPI Documentation**: Schema-driven API via Swagger.
+
+---
 
 ## Technology Stack
 
--   **Backend**: Django, Django REST Framework
--   **Authentication**: djangorestframework-simplejwt (JWT)
--   **Database**: Supports PostgreSQL (production) and SQLite (development)
--   **API Documentation**: drf-spectacular (Swagger/OpenAPI)
+* **Backend**: Django, Django REST Framework
+* **Authentication**: djangorestframework-simplejwt (JWT)
+* **Database**: PostgreSQL (production), SQLite (development)
+* **API Docs**: drf-spectacular (OpenAPI/Swagger)
+
+---
 
 ## Getting Started
 
-Follow these steps to set up and run the project on your local machine.
-
 ### Prerequisites
 
--   Python 3.x
--   `pip` and `venv`
+* Python 3.x
+* `pip` and `venv`
+
+---
 
 ### 1. Clone the Repository
 
@@ -40,13 +46,17 @@ git clone https://github.com/zeroruntime/url_shortener_backend.git
 cd url_shortener_backend
 ```
 
-### 2. Set Up a Virtual Environment
+---
+
+### 2. Set Up Virtual Environment
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-# On Windows, use: venv\Scripts\activate
+# Windows: venv\Scripts\activate
 ```
+
+---
 
 ### 3. Install Dependencies
 
@@ -55,87 +65,145 @@ pip install --upgrade pip
 pip install Django==5.0 djangorestframework djangorestframework-simplejwt dj-database-url psycopg2-binary python-dotenv drf-spectacular
 ```
 
-### 4. Configure the Database
+---
 
-The project defaults to SQLite for local development, which requires no configuration.
+### 4. Configure Database
 
-To use PostgreSQL, create a `.env` file in the project root and add your database connection string:
+Default is SQLite (no setup needed).
+
+For PostgreSQL, create a `.env` file:
 
 ```
-# .env file
 DATABASE_URL=postgresql://user:password@hostname:5432/dbname
 ```
 
-### 5. Apply Migrations
+---
 
-Run the following command to set up the database schema:
+### 5. Run Migrations
 
 ```bash
 python manage.py migrate
 ```
 
-### 6. Run the Development Server
+---
+
+### 6. Start Server
 
 ```bash
 python manage.py runserver
 ```
 
-The API will be available at `http://127.0.0.1:8000`.
+API base URL:
+
+```
+http://127.0.0.1:8000/api/
+```
+
+---
 
 ## API Documentation
 
-Once the server is running, you can access the interactive Swagger UI for complete API documentation, request/response examples, and endpoint testing.
+Swagger UI:
 
--   **Swagger UI**: **http://127.0.0.1:8000/api/docs/**
+```
+http://127.0.0.1:8000/api/docs/
+```
 
-You can use the Swagger interface to register a user, obtain a JWT token, and test all protected endpoints directly in your browser.
+---
 
-## API Endpoints
+## Authentication
 
-All endpoints are prefixed with `/api/v1/`.
+### Endpoints
 
-### Authentication
+| Method | Endpoint                   | Description                      |
+| ------ | -------------------------- | -------------------------------- |
+| POST   | `/api/auth/register/`      | Register a new user              |
+| POST   | `/api/auth/token/`         | Obtain access + refresh tokens   |
+| POST   | `/api/auth/token/refresh/` | Refresh access token             |
+| POST   | `/api/auth/logout/`        | Logout (blacklist refresh token) |
+| GET    | `/api/auth/protected/`     | Test protected route             |
 
-| Method | Endpoint                    | Description                       |
-| :----- | :-------------------------- | :-------------------------------- |
-| `POST` | `/auth/register/`           | Create a new user account.        |
-| `POST` | `/auth/token/`              | Log in and receive JWT tokens.    |
-| `POST` | `/auth/token/refresh/`      | Obtain a new access token.        |
-| `POST` | `/auth/logout/`             | Blacklist a refresh token to log out. |
-
-### Link Management
-
-*All link management endpoints require `Authorization: Bearer <YOUR_ACCESS_TOKEN>` header.*
-
-| Method   | Endpoint                  | Description                               |
-| :------- | :------------------------ | :---------------------------------------- |
-| `POST`   | `/urls/shorten/`          | Create a new short link.                  |
-| `GET`    | `/urls/getall/`           | List all of your links (paginated).       |
-| `GET`    | `/urls/<int:pk>/`         | Retrieve details for a specific link.     |
-| `DELETE` | `/urls/delete/<int:pk>/`  | Delete a specific link.                   |
-| `GET`    | `/urls/<int:pk>/analytics/` | Get click analytics for a specific link.  |
-| `GET`    | `/<short_code>/`          | Redirect to the original URL.             |
-
-### Example: Creating a Short Link
+### Example: Login
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/urls/shorten/ \
+curl -X POST http://localhost:8000/api/auth/token/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "your_username",
+    "password": "your_password"
+  }'
+```
+
+**Response**
+
+```json
+{
+  "access": "ACCESS_TOKEN",
+  "refresh": "REFRESH_TOKEN"
+}
+```
+
+---
+
+## Link Management
+
+All endpoints require:
+
+```
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+### Endpoints
+
+| Method | Endpoint                     | Description            |
+| ------ | ---------------------------- | ---------------------- |
+| GET    | `/api/links/`                | List all links         |
+| GET    | `/api/links/{id}/`           | Retrieve a single link |
+| POST   | `/api/links/shorten/`        | Create a short link    |
+| DELETE | `/api/links/{id}/delete/`    | Delete a link          |
+| GET    | `/api/links/{id}/analytics/` | Get link analytics     |
+
+---
+
+## Link Object Schema
+
+```json
+{
+  "id": 1,
+  "short_code": "abc123",
+  "original_url": "https://example.com",
+  "custom_alias": "my-link",
+  "user": 1,
+  "is_active": true,
+  "expires_at": "2026-12-31T23:59:59Z"
+}
+```
+
+---
+
+## Example: Create Short Link
+
+```bash
+curl -X POST http://localhost:8000/api/links/shorten/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
     "original_url": "https://github.com/zeroruntime/url_shortener_backend",
-    "custom_alias": "my-repo"
+    "custom_alias": "my-repo",
+    "is_active": true
   }'
 ```
 
-**Response:**
+**Response**
 
 ```json
 {
-  "shortUrl": "my-repo",
-  "customAlias": "my-repo",
-  "longUrl": "https://github.com/zeroruntime/url_shortener_backend"
+  "id": 1,
+  "short_code": "my-repo",
+  "original_url": "https://github.com/zeroruntime/url_shortener_backend",
+  "custom_alias": "my-repo",
+  "user": 1,
+  "is_active": true,
+  "expires_at": null
 }
 ```
-
-Now, navigating to `http://localhost:8000/my-repo/` will redirect you to the original URL.
